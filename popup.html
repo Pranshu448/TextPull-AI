@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>TextPull AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #08090c;
+      --s1: #0f1117;
+      --s2: #161820;
+      --s3: #1e2029;
+      --border: #252730;
+      --border2: #2e3040;
+      --cyan: #00e5cc;
+      --cyan2: #00b8a5;
+      --orange: #ff6b35;
+      --yellow: #ffd166;
+      --text: #e8eaf2;
+      --muted: #5a5d75;
+      --muted2: #3d3f52;
+      --mono: 'IBM Plex Mono', monospace;
+      --display: 'Syne', sans-serif;
+      --success: #4ade80;
+      --error: #f87171;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 420px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--display);
+      font-size: 13px;
+      overflow: hidden;
+    }
+
+    /* ── HEADER ─────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 16px;
+      background: var(--s1);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .brand-icon {
+      width: 28px; height: 28px;
+      background: var(--cyan);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .brand-icon svg { width: 15px; height: 15px; }
+
+    .brand-text { line-height: 1; }
+    .brand-name {
+      font-family: var(--display);
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .brand-tag {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+
+    .header-right { display: flex; gap: 6px; align-items: center; }
+
+    .icon-btn {
+      width: 28px; height: 28px;
+      border: 1px solid var(--border2);
+      border-radius: 5px;
+      background: var(--s2);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: var(--muted);
+    }
+    .icon-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+    .icon-btn svg { width: 13px; height: 13px; }
+
+    /* ── PAGE BAR ─────────────────────────── */
+    .page-bar {
+      padding: 9px 16px;
+      background: var(--s2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .page-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .page-url {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── SETTINGS PANEL ───────────────────── */
+    .settings-panel {
+      display: none;
+      padding: 14px 16px;
+      background: var(--s1);
+      border-bottom: 1px solid var(--border);
+      flex-direction: column;
+      gap: 10px;
+    }
+    .settings-panel.open { display: flex; }
+
+    .settings-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .input-group { display: flex; flex-direction: column; gap: 5px; }
+    .input-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    .api-input-row { display: flex; gap: 6px; }
+
+    .api-input {
+      flex: 1;
+      padding: 8px 10px;
+      background: var(--s3);
+      border: 1px solid var(--border2);
+      border-radius: 5px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .api-input:focus { border-color: var(--cyan); }
+    .api-input::placeholder { color: var(--muted2); }
+
+    .save-btn {
+      padding: 8px 14px;
+      background: var(--cyan);
+      color: #08090c;
+      border: none;
+      border-radius: 5px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.15s;
+    }
+    .save-btn:hover { background: var(--cyan2); }
+
+    .settings-hint {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .settings-hint a {
+      color: var(--cyan);
+      text-decoration: none;
+    }
+
+    /* ── MODEL SELECTOR ───────────────────── */
+    .model-row {
+      display: flex;
+      gap: 5px;
+    }
+
+    .model-chip {
+      padding: 4px 10px;
+      border-radius: 3px;
+      border: 1px solid var(--border2);
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 10px;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 0.03em;
+    }
+    .model-chip:hover { border-color: var(--cyan); color: var(--cyan); }
+    .model-chip.active {
+      background: var(--s3);
+      border-color: var(--cyan);
+      color: var(--cyan);
+      font-weight: 600;
+    }
+
+    /* ── MAIN AREA ────────────────────────── */
+    .main {
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Prompt style selector */
+    .mode-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .mode-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+
+    .mode-card {
+      padding: 8px 6px;
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      background: var(--s2);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .mode-card:hover { border-color: var(--cyan2); }
+    .mode-card.active {
+      border-color: var(--cyan);
+      background: rgba(0,229,204,0.07);
+    }
+    .mode-icon { font-size: 16px; line-height: 1; }
+    .mode-name {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .mode-card.active .mode-name { color: var(--cyan); }
+
+    /* CTA Button */
+    .cta-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--cyan);
+      color: #08090c;
+      border: none;
+      border-radius: 7px;
+      font-family: var(--display);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-btn:hover:not(:disabled) { background: #00f5dc; transform: translateY(-1px); }
+    .cta-btn:active { transform: translateY(0); }
+    .cta-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* AI Output */
+    .output-section { display: none; }
+    .output-section.visible { display: block; }
+
+    .output-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .output-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .ai-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      background: rgba(0,229,204,0.12);
+      border: 1px solid rgba(0,229,204,0.25);
+      border-radius: 20px;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--cyan);
+      letter-spacing: 0.05em;
+    }
+
+    .ai-dot {
+      width: 5px; height: 5px;
+      background: var(--cyan);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    .output-actions { display: flex; gap: 5px; }
+
+    .mini-btn {
+      padding: 4px 9px;
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      background: var(--s2);
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .mini-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+    .mini-btn.success { border-color: var(--success); color: var(--success); }
+
+    /* AI response box */
+    .ai-box {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      overflow: hidden;
+    }
+
+    .ai-content {
+      padding: 14px;
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 1.7;
+      color: var(--text);
+      max-height: 240px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border2) transparent;
+    }
+
+    /* Bullet formatting */
+    .ai-content .ai-bullet {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .ai-content .bullet-dot {
+      color: var(--cyan);
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .ai-content .ai-section-title {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--cyan);
+      margin-bottom: 8px;
+      margin-top: 10px;
+    }
+    .ai-content .ai-section-title:first-child { margin-top: 0; }
+
+    .ai-meta {
+      padding: 8px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ai-meta-left {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      color: var(--muted);
+    }
+
+    .ai-meta-model {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      color: var(--muted2);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Loading shimmer */
+    .loading-box {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .shimmer-line {
+      height: 12px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--s3) 25%, var(--s2) 50%, var(--s3) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Error state */
+    .error-box {
+      padding: 12px 14px;
+      background: rgba(248,113,113,0.07);
+      border: 1px solid rgba(248,113,113,0.2);
+      border-radius: 7px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--error);
+      line-height: 1.5;
+      display: none;
+    }
+    .error-box.show { display: block; }
+
+    /* No-key warning */
+    .key-warning {
+      padding: 10px 14px;
+      background: rgba(255,107,53,0.08);
+      border: 1px solid rgba(255,107,53,0.2);
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--orange);
+      line-height: 1.6;
+      display: none;
+    }
+    .key-warning.show { display: block; }
+    .key-warning strong { display: block; margin-bottom: 2px; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="brand">
+    <div class="brand-icon">
+      <svg viewBox="0 0 15 15" fill="none">
+        <path d="M2 3h11M2 7h7M2 11h9" stroke="#08090c" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="11" r="2.5" fill="#08090c"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <div class="brand-name">TextPull AI</div>
+      <div class="brand-tag">Llama3 Summarizer</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="icon-btn" id="settingsBtn" title="Settings">
+      <svg viewBox="0 0 14 14" fill="none">
+        <circle cx="7" cy="7" r="2" stroke="currentColor" stroke-width="1.2"/>
+        <path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.5 2.5l1 1M10.5 10.5l1 1M2.5 11.5l1-1M10.5 3.5l1-1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS PANEL -->
+<div class="settings-panel" id="settingsPanel">
+  <div class="settings-title">⚙ Configuration</div>
+
+  <div class="input-group">
+    <div class="input-label">LOCAL OLLAMA MODEL</div>
+    <div class="model-row" id="modelRow">
+      <button class="model-chip active" data-model="llama3:latest">Llama 3</button>
+      <button class="model-chip" data-model="llama3.1:latest">Llama 3.1</button>
+      <button class="model-chip" data-model="llama3.2:latest">Llama 3.2</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE BAR -->
+<div class="page-bar">
+  <div class="page-title" id="pageTitle">Loading...</div>
+  <div class="page-url" id="pageUrl">—</div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- Mode cards -->
+  <div>
+    <div class="mode-label">Summarize as</div>
+    <div class="mode-cards">
+      <div class="mode-card active" data-mode="tldr">
+        <div class="mode-icon">⚡</div>
+        <div class="mode-name">TL;DR</div>
+      </div>
+      <div class="mode-card" data-mode="bullets">
+        <div class="mode-icon">📋</div>
+        <div class="mode-name">Bullets</div>
+      </div>
+      <div class="mode-card" data-mode="detailed">
+        <div class="mode-icon">📖</div>
+        <div class="mode-name">Detailed</div>
+      </div>
+      <div class="mode-card" data-mode="keywords">
+        <div class="mode-icon">🏷️</div>
+        <div class="mode-name">Keywords</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- No key warning -->
+  <div class="key-warning" id="keyWarning">
+    <strong>⚠ Ollama Not Running</strong>
+    Make sure Ollama is installed and running locally on port 11434.
+  </div>
+
+  <!-- CTA -->
+  <button class="cta-btn" id="analyzeBtn">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M8 2L9.5 6H14L10.5 8.5L12 13L8 10.5L4 13L5.5 8.5L2 6H6.5L8 2Z" fill="currentColor"/>
+    </svg>
+    Analyze with Llama3
+  </button>
+
+  <!-- Error -->
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- Output -->
+  <div class="output-section" id="outputSection">
+    <div class="output-header">
+      <div class="output-label">
+        <span>AI Summary</span>
+        <div class="ai-badge">
+          <div class="ai-dot"></div>
+          <span id="modelLabel">llama3-8b</span>
+        </div>
+      </div>
+      <div class="output-actions">
+        <button class="mini-btn" id="copyResultBtn">Copy</button>
+        <button class="mini-btn" id="retryBtn">↺ Retry</button>
+      </div>
+    </div>
+
+    <div class="ai-box">
+      <div class="ai-content" id="aiContent">
+        <!-- Loading shimmer -->
+        <div class="loading-box" id="loadingShimmer">
+          <div class="shimmer-line" style="width:85%"></div>
+          <div class="shimmer-line" style="width:65%"></div>
+          <div class="shimmer-line" style="width:90%"></div>
+          <div class="shimmer-line" style="width:55%"></div>
+          <div class="shimmer-line" style="width:75%"></div>
+        </div>
+      </div>
+      <div class="ai-meta">
+        <div class="ai-meta-left" id="metaWords">— words read</div>
+        <div class="ai-meta-model" id="metaModel">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+            <circle cx="4.5" cy="4.5" r="4" stroke="var(--muted2)" stroke-width="1"/>
+            <path d="M2.5 4.5h4M4.5 2.5v4" stroke="var(--muted2)" stroke-width="1" stroke-linecap="round"/>
+          </svg>
+          groq
+        </div>
+      </div>
+    </div>
+    
+    <!-- CHAT SECTION -->
+    <div class="chat-section" id="chatSection" style="display: none; margin-top: 15px; border-top: 1px dashed var(--border); padding-top: 15px;">
+      <div class="output-label" style="margin-bottom: 10px;">Chat with Page</div>
+      
+      <div class="chat-history" id="chatHistory" style="max-height: 200px; overflow-y: auto; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; padding-right: 5px;">
+        <!-- Chat bubbles appear here -->
+      </div>
+      
+      <div style="display: flex; gap: 6px;">
+        <input type="text" id="chatInput" placeholder="Ask a question about this page..." style="flex: 1; padding: 10px 12px; background: var(--s3); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-family: var(--display); font-size: 11px; outline: none; transition: border-color 0.15s;"/>
+        <button id="chatBtn" style="padding: 10px 16px; background: var(--cyan); color: #08090c; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s;">
+            Ask
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>
