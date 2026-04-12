@@ -31,8 +31,8 @@ class ChatRequest(BaseModel):
     message: str
 
 # IMPROVED: Lower temperature for more factual responses
-llm = ChatOllama(model="llama3:latest", temperature=0.0)
-embeddings = OllamaEmbeddings(model="llama3:latest")
+llm = ChatOllama(model="qwen2.5-coder:3b", temperature=0.0)
+embeddings = OllamaEmbeddings(model="qwen2.5-coder:3b")
 
 sessions = {}
 
@@ -82,6 +82,25 @@ OUTPUT FORMAT:
 
 Your Response:"""
 
+fallback_template = """You are analyzing webpage content directly.
+
+STRICT RULES:
+1. Use ONLY the webpage text below
+2. Do NOT add outside knowledge or assumptions
+3. If details are missing, say they are not clearly stated in the page
+4. Keep the response concise and factual
+
+WEBPAGE TEXT:
+{text}
+
+TASK:
+{instruction}
+
+Your Response:"""
+
+fallback_prompt = PromptTemplate.from_template(fallback_template)
+fallback_chain = fallback_prompt | llm | StrOutputParser()
+
 @app.post("/analyze")
 async def analyze_content(req: AnalyzeRequest):
     try:
@@ -93,6 +112,7 @@ async def analyze_content(req: AnalyzeRequest):
         )
         texts = text_splitter.split_text(req.content)
         docs = [Document(page_content=t) for t in texts]
+        vectorstore = InMemoryVectorStore.from_documents(docs, embeddings)
         
         # 1. Map: Extract facts from all chunks concurrently
         map_tasks = [map_chain.ainvoke({"text": t}) for t in texts]
@@ -102,7 +122,17 @@ async def analyze_content(req: AnalyzeRequest):
         chunk_summaries = [s for s in chunk_summaries if s and s.strip() and "No significant facts" not in s]
         
         if not chunk_summaries:
-            return {"result": "Could not extract meaningful information from this page."}
+            fallback_source = req.content[:12000]
+            fallback_result = await fallback_chain.ainvoke({
+                "text": fallback_source,
+                "instruction": req.instruction
+            })
+            sessions[req.session_id] = {
+                "vectorstore": vectorstore,
+                "memory": [],
+                "original_findings": fallback_source
+            }
+            return {"result": fallback_result}
         
         # Combine all chunk summaries
         combined_findings = "\n\n".join(chunk_summaries)
@@ -114,9 +144,6 @@ async def analyze_content(req: AnalyzeRequest):
             "text": combined_findings, 
             "instruction": req.instruction
         })
-        
-        # 3. Build VectorStore for Q&A
-        vectorstore = InMemoryVectorStore.from_documents(docs, embeddings)
         
         sessions[req.session_id] = {
             "vectorstore": vectorstore,

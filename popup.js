@@ -5,7 +5,8 @@
 // ── State Management ─────────────────────────────────────────────────
 const AppState = {
   selectedMode: 'tldr',
-  selectedModel: 'llama3:latest',
+  selectedModel: 'qwen2.5-coder:3b',
+  theme: 'dark',
   sessionId: `sess_${Math.random().toString(36).substr(2, 9)}`,
   lastSummary: '',
   isAnalyzing: false,
@@ -42,13 +43,12 @@ const DOM = {
     this.loadingShimmer = this.$('loadingShimmer');
     this.errorBox = this.$('errorBox');
     this.retryBtn = this.$('retryBtn');
+    this.copyResultBtn = this.$('copyResultBtn');
     this.metaWords = this.$('metaWords');
     this.metaModel = this.$('metaModel');
-    this.modelLabel = this.$('modelLabel');
     this.pageTitle = this.$('pageTitle');
     this.pageUrl = this.$('pageUrl');
-    this.settingsBtn = this.$('settingsBtn');
-    this.settingsPanel = this.$('settingsPanel');
+    this.themeToggleBtn = this.$('themeToggleBtn');
     this.chatSection = this.$('chatSection');
     this.chatInput = this.$('chatInput');
     this.chatBtn = this.$('chatBtn');
@@ -59,6 +59,7 @@ const DOM = {
 // ── Initialization ───────────────────────────────────────────────────
 async function initializeExtension() {
   DOM.init();
+  await loadTheme();
   
   // Get current tab info
   try {
@@ -79,15 +80,7 @@ async function initializeExtension() {
 
 // ── Event Listeners ──────────────────────────────────────────────────
 function setupEventListeners() {
-  // Settings panel toggle
-  DOM.settingsBtn?.addEventListener('click', () => {
-    DOM.settingsPanel?.classList.toggle('open');
-  });
-  
-  // Model selection
-  document.querySelectorAll('.model-chip').forEach(chip => {
-    chip.addEventListener('click', () => handleModelSelection(chip));
-  });
+  DOM.themeToggleBtn?.addEventListener('click', toggleTheme);
   
   // Mode selection
   document.querySelectorAll('.mode-card').forEach(card => {
@@ -97,6 +90,7 @@ function setupEventListeners() {
   // Analysis buttons
   DOM.analyzeBtn?.addEventListener('click', runAnalysis);
   DOM.retryBtn?.addEventListener('click', runAnalysis);
+  DOM.copyResultBtn?.addEventListener('click', copyResultToClipboard);
   
   // Chat functionality
   DOM.chatBtn?.addEventListener('click', runChat);
@@ -109,23 +103,54 @@ function setupEventListeners() {
 }
 
 // ── UI Handlers ──────────────────────────────────────────────────────
-function handleModelSelection(chip) {
-  document.querySelectorAll('.model-chip').forEach(c => c.classList.remove('active'));
-  chip.classList.add('active');
-  AppState.selectedModel = chip.dataset.model || 'llama3:latest';
-  if (DOM.modelLabel) DOM.modelLabel.textContent = AppState.selectedModel;
-}
-
 function handleModeSelection(card) {
   document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('active'));
   card.classList.add('active');
   AppState.selectedMode = card.dataset.mode;
 }
 
+async function loadTheme() {
+  try {
+    const stored = await chrome.storage.local.get(['theme']);
+    AppState.theme = stored.theme === 'light' ? 'light' : 'dark';
+  } catch (error) {
+    console.warn('Failed to load theme preference:', error);
+    AppState.theme = 'dark';
+  }
+
+  applyTheme(AppState.theme);
+}
+
+function applyTheme(theme) {
+  AppState.theme = theme === 'light' ? 'light' : 'dark';
+  document.body.dataset.theme = AppState.theme;
+
+  if (DOM.themeToggleBtn) {
+    const label = AppState.theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
+    DOM.themeToggleBtn.title = label;
+    DOM.themeToggleBtn.setAttribute('aria-label', label);
+  }
+}
+
+async function toggleTheme() {
+  const nextTheme = AppState.theme === 'light' ? 'dark' : 'light';
+  applyTheme(nextTheme);
+
+  try {
+    await chrome.storage.local.set({ theme: nextTheme });
+  } catch (error) {
+    console.warn('Failed to save theme preference:', error);
+  }
+}
+
 // ── Content Extraction ───────────────────────────────────────────────
 async function extractPageContent() {
   if (!AppState.currentTab) {
     throw new Error('No active tab found');
+  }
+
+  if (!/^https?:/i.test(AppState.currentTab.url || '')) {
+    throw new Error('This page is not supported. Open a regular website tab and try again.');
   }
   
   // Inject content script
@@ -160,7 +185,7 @@ function validateContent(data) {
   return {
     isValid: true,
     text: data.text,
-    pageTitle: data.pageTitle || 'Untitled Page',
+    pageTitle: data.pageTitle || data.title || 'Untitled Page',
     wordCount: data.text.split(/\s+/).length
   };
 }
@@ -307,6 +332,10 @@ function handleAnalysisError(error) {
     userMessage = 'Cannot connect to backend. Make sure the Python server is running on port 8000.';
   } else if (error.message.includes('extract')) {
     userMessage = 'Failed to extract page content. Try refreshing the page.';
+  } else if (error.message.includes('not supported')) {
+    userMessage = error.message;
+  } else if (error.message.includes('too short or empty')) {
+    userMessage = 'This page does not expose enough readable text yet. Let the page finish loading, then try again.';
   }
   
   showError(userMessage);
@@ -318,7 +347,7 @@ function setAnalyzeButtonState(state) {
   
   const states = {
     ready: {
-      text: 'Analyze with Llama3',
+      text: 'Analyze Page',
       disabled: false
     },
     extracting: {
@@ -373,10 +402,44 @@ function displayAnalysisResult(result) {
   DOM.aiContent.innerHTML = '';
   DOM.aiContent.appendChild(resultElement);
   
-  DOM.metaModel.textContent = `ollama · ${AppState.selectedModel}`;
+  DOM.metaModel.textContent = 'Grounded webpage summary';
   
   // Scroll to results
   DOM.outputSection?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function copyResultToClipboard() {
+  if (!AppState.lastSummary || !DOM.copyResultBtn) return;
+
+  const originalLabel = DOM.copyResultBtn.textContent;
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(AppState.lastSummary);
+    } else {
+      const helper = document.createElement('textarea');
+      helper.value = AppState.lastSummary;
+      helper.setAttribute('readonly', '');
+      helper.style.position = 'absolute';
+      helper.style.left = '-9999px';
+      document.body.appendChild(helper);
+      helper.select();
+      document.execCommand('copy');
+      document.body.removeChild(helper);
+    }
+
+    DOM.copyResultBtn.textContent = 'Copied';
+    DOM.copyResultBtn.classList.add('success');
+  } catch (error) {
+    console.error('Copy failed:', error);
+    DOM.copyResultBtn.textContent = 'Failed';
+  }
+
+  window.setTimeout(() => {
+    if (!DOM.copyResultBtn) return;
+    DOM.copyResultBtn.textContent = originalLabel;
+    DOM.copyResultBtn.classList.remove('success');
+  }, 1600);
 }
 
 // ── Task Instructions ────────────────────────────────────────────────
