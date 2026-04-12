@@ -1,7 +1,12 @@
 import asyncio
+import json
+import ssl
+import urllib.error
+import urllib.request
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -9,6 +14,7 @@ from langchain_core.documents import Document
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.output_parsers import StrOutputParser
+import certifi
 
 app = FastAPI(title="TextPull AI Backend")
 
@@ -25,10 +31,14 @@ class AnalyzeRequest(BaseModel):
     content: str
     mode: str = "tldr"
     instruction: str = ""
+    provider: Optional[str] = None
+    api_key: Optional[str] = None
 
 class ChatRequest(BaseModel):
     session_id: str
     message: str
+    provider: Optional[str] = None
+    api_key: Optional[str] = None
 
 # IMPROVED: Lower temperature for more factual responses
 llm = ChatOllama(model="qwen2.5-coder:3b", temperature=0.0)
@@ -101,9 +111,153 @@ Your Response:"""
 fallback_prompt = PromptTemplate.from_template(fallback_template)
 fallback_chain = fallback_prompt | llm | StrOutputParser()
 
+GEMINI_MODEL = "gemini-2.5-flash"
+SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+
+
+def build_context_snippets(content: str, query: str, max_chunks: int = 5):
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1800,
+        chunk_overlap=200,
+        separators=["\n\n", "\n", ". ", " ", ""]
+    )
+    chunks = splitter.split_text(content)
+
+    if not query.strip():
+        return chunks[:max_chunks]
+
+    query_terms = {term for term in query.lower().split() if len(term) > 2}
+
+    def score(chunk: str):
+        chunk_lower = chunk.lower()
+        return sum(1 for term in query_terms if term in chunk_lower)
+
+    ranked = sorted(chunks, key=score, reverse=True)
+    useful = [chunk for chunk in ranked if score(chunk) > 0]
+    return (useful or chunks)[:max_chunks]
+
+
+def extract_gemini_text(data):
+    candidates = data.get("candidates", [])
+    parts = []
+
+    for candidate in candidates:
+        content = candidate.get("content", {})
+        for part in content.get("parts", []):
+            text = part.get("text")
+            if text:
+                parts.append(text)
+
+    return "\n".join(parts).strip()
+
+
+def call_gemini(api_key: str, user_parts, system_instruction: str):
+    body = {
+        "system_instruction": {
+            "parts": [{"text": system_instruction}]
+        },
+        "contents": user_parts
+    }
+
+    request = urllib.request.Request(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": api_key
+        },
+        method="POST"
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=60, context=SSL_CONTEXT) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        details = error.read().decode("utf-8", errors="replace")
+        raise ValueError(f"Gemini request failed: {details}") from error
+    except urllib.error.URLError as error:
+        raise ValueError(f"Gemini connection failed: {error.reason}") from error
+
+    text = extract_gemini_text(data)
+    if not text:
+      raise ValueError("Gemini returned an empty response.")
+
+    return text
+
+
+def analyze_with_gemini(req: AnalyzeRequest):
+    system_instruction = """You summarize webpage content with strict grounding.
+
+Rules:
+1. Use only the webpage text provided by the user
+2. Do not add external facts or assumptions
+3. If information is unclear, say it is not clearly stated
+4. Keep the response concise, accurate, and directly useful
+"""
+
+    user_parts = [{
+        "role": "user",
+        "parts": [{
+            "text": f"Task:\n{req.instruction}\n\nWebpage content:\n{req.content[:50000]}"
+        }]
+    }]
+
+    result = call_gemini(req.api_key, user_parts, system_instruction)
+
+    sessions[req.session_id] = {
+        "provider": "gemini",
+        "memory": [],
+        "original_content": req.content
+    }
+
+    return {"result": result}
+
+
+def chat_with_gemini(req: ChatRequest, session):
+    context_chunks = build_context_snippets(session["original_content"], req.message)
+    context = "\n\n---\n\n".join(context_chunks)
+
+    history = session.get("memory", [])
+    conversation_parts = []
+
+    for item in history:
+        conversation_parts.append({
+            "role": item["role"],
+            "parts": [{"text": item["text"]}]
+        })
+
+    conversation_parts.append({
+        "role": "user",
+        "parts": [{
+            "text": f"Page context:\n{context}\n\nQuestion: {req.message}"
+        }]
+    })
+
+    system_instruction = """You answer questions about a webpage.
+
+Rules:
+1. Answer only from the supplied page context
+2. If the answer is not present, say: "I cannot find this information on the page."
+3. Do not use outside knowledge
+4. Be direct and concise
+"""
+
+    response = call_gemini(req.api_key, conversation_parts, system_instruction)
+
+    history.append({"role": "user", "text": req.message})
+    history.append({"role": "model", "text": response})
+    session["memory"] = history[-8:]
+
+    return {"result": response}
+
 @app.post("/analyze")
 async def analyze_content(req: AnalyzeRequest):
     try:
+        if req.provider == "gemini":
+            if not req.api_key:
+                return {"error": "Gemini API key is required."}
+            return analyze_with_gemini(req)
+
         # IMPROVED: Better chunking for context preservation
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=3000, 
@@ -161,6 +315,12 @@ async def chat_with_document(req: ChatRequest):
         raise HTTPException(status_code=400, detail="Initialize a session by analyzing the page first.")
         
     session = sessions[req.session_id]
+
+    if session.get("provider") == "gemini":
+        if not req.api_key:
+            raise HTTPException(status_code=400, detail="Gemini API key is required for premium chat.")
+        return chat_with_gemini(req, session)
+
     vectorstore = session["vectorstore"]
     memory = session["memory"]
     

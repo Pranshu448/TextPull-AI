@@ -7,6 +7,11 @@ const AppState = {
   selectedMode: 'tldr',
   selectedModel: 'qwen2.5-coder:3b',
   theme: 'dark',
+  premiumPanelOpen: false,
+  premiumProvider: 'openai',
+  premiumApiKey: '',
+  isPremiumAnalyzing: false,
+  activeProvider: 'local',
   sessionId: `sess_${Math.random().toString(36).substr(2, 9)}`,
   lastSummary: '',
   isAnalyzing: false,
@@ -38,6 +43,10 @@ const DOM = {
   // Cache all elements
   init() {
     this.analyzeBtn = this.$('analyzeBtn');
+    this.premiumToggleBtn = this.$('premiumToggleBtn');
+    this.premiumPanel = this.$('premiumPanel');
+    this.premiumApiKey = this.$('premiumApiKey');
+    this.premiumProvider = this.$('premiumProvider');
     this.outputSection = this.$('outputSection');
     this.aiContent = this.$('aiContent');
     this.loadingShimmer = this.$('loadingShimmer');
@@ -59,7 +68,7 @@ const DOM = {
 // ── Initialization ───────────────────────────────────────────────────
 async function initializeExtension() {
   DOM.init();
-  await loadTheme();
+  await loadPreferences();
   
   // Get current tab info
   try {
@@ -81,6 +90,9 @@ async function initializeExtension() {
 // ── Event Listeners ──────────────────────────────────────────────────
 function setupEventListeners() {
   DOM.themeToggleBtn?.addEventListener('click', toggleTheme);
+  DOM.premiumToggleBtn?.addEventListener('click', handlePremiumButtonClick);
+  DOM.premiumApiKey?.addEventListener('input', handlePremiumApiKeyInput);
+  DOM.premiumProvider?.addEventListener('change', handlePremiumProviderChange);
   
   // Mode selection
   document.querySelectorAll('.mode-card').forEach(card => {
@@ -121,6 +133,31 @@ async function loadTheme() {
   applyTheme(AppState.theme);
 }
 
+async function loadPreferences() {
+  try {
+    const stored = await chrome.storage.local.get([
+      'theme',
+      'premiumPanelOpen',
+      'premiumProvider',
+      'premiumApiKey'
+    ]);
+
+    AppState.theme = stored.theme === 'light' ? 'light' : 'dark';
+    AppState.premiumPanelOpen = Boolean(stored.premiumPanelOpen);
+    AppState.premiumProvider = stored.premiumProvider || 'openai';
+    AppState.premiumApiKey = stored.premiumApiKey || '';
+  } catch (error) {
+    console.warn('Failed to load preferences:', error);
+    AppState.theme = 'dark';
+    AppState.premiumPanelOpen = false;
+    AppState.premiumProvider = 'openai';
+    AppState.premiumApiKey = '';
+  }
+
+  applyTheme(AppState.theme);
+  syncPremiumPanel();
+}
+
 function applyTheme(theme) {
   AppState.theme = theme === 'light' ? 'light' : 'dark';
   document.body.dataset.theme = AppState.theme;
@@ -140,6 +177,64 @@ async function toggleTheme() {
     await chrome.storage.local.set({ theme: nextTheme });
   } catch (error) {
     console.warn('Failed to save theme preference:', error);
+  }
+}
+
+function syncPremiumPanel() {
+  if (DOM.premiumPanel) {
+    DOM.premiumPanel.classList.toggle('visible', AppState.premiumPanelOpen);
+  }
+
+  if (DOM.premiumToggleBtn) {
+    DOM.premiumToggleBtn.classList.toggle('active', AppState.premiumPanelOpen);
+  }
+
+  if (DOM.premiumApiKey) {
+    DOM.premiumApiKey.value = AppState.premiumApiKey;
+  }
+
+  if (DOM.premiumProvider) {
+    DOM.premiumProvider.value = AppState.premiumProvider;
+  }
+}
+
+async function togglePremiumPanel() {
+  AppState.premiumPanelOpen = !AppState.premiumPanelOpen;
+  syncPremiumPanel();
+
+  try {
+    await chrome.storage.local.set({ premiumPanelOpen: AppState.premiumPanelOpen });
+  } catch (error) {
+    console.warn('Failed to save premium panel state:', error);
+  }
+}
+
+async function handlePremiumButtonClick() {
+  if (!AppState.premiumPanelOpen) {
+    await togglePremiumPanel();
+    return;
+  }
+
+  await runPremiumAnalysis();
+}
+
+async function handlePremiumApiKeyInput(event) {
+  AppState.premiumApiKey = event.target.value;
+
+  try {
+    await chrome.storage.local.set({ premiumApiKey: AppState.premiumApiKey });
+  } catch (error) {
+    console.warn('Failed to save premium API key:', error);
+  }
+}
+
+async function handlePremiumProviderChange(event) {
+  AppState.premiumProvider = event.target.value;
+
+  try {
+    await chrome.storage.local.set({ premiumProvider: AppState.premiumProvider });
+  } catch (error) {
+    console.warn('Failed to save premium provider:', error);
   }
 }
 
@@ -207,6 +302,7 @@ function prepareContent(validatedData) {
 // ── Analysis Workflow ────────────────────────────────────────────────
 async function runAnalysis() {
   if (AppState.isAnalyzing) return;
+  AppState.activeProvider = 'local';
   
   AppState.isAnalyzing = true;
   hideError();
@@ -255,6 +351,57 @@ async function runAnalysis() {
   }
 }
 
+async function runPremiumAnalysis() {
+  if (AppState.isPremiumAnalyzing) return;
+
+  if (AppState.premiumProvider !== 'gemini') {
+    showError('Only Gemini is connected right now. Choose Gemini in Premium to test your API key.');
+    return;
+  }
+
+  if (!AppState.premiumApiKey.trim()) {
+    showError('Paste your Gemini API key first.');
+    return;
+  }
+
+  AppState.activeProvider = 'gemini';
+  AppState.isPremiumAnalyzing = true;
+  hideError();
+  setPremiumButtonState('extracting');
+
+  try {
+    updatePremiumStatus('Extracting page content...');
+    const extractedData = await extractPageContent();
+    const validatedData = validateContent(extractedData);
+    const { content, wordCount, wasTruncated } = prepareContent(validatedData);
+
+    DOM.metaWords.textContent = wasTruncated
+      ? `${wordCount} words (truncated to ${Config.MAX_WORDS_TO_SEND})`
+      : `${wordCount} words`;
+
+    showLoadingState();
+    setPremiumButtonState('analyzing');
+
+    const result = await analyzeWithBackend({
+      session_id: AppState.sessionId,
+      mode: AppState.selectedMode,
+      instruction: getTaskInstruction(AppState.selectedMode),
+      content,
+      provider: 'gemini',
+      api_key: AppState.premiumApiKey
+    });
+
+    displayAnalysisResult(result);
+    enableChat();
+  } catch (error) {
+    console.error('Premium analysis failed:', error);
+    handleAnalysisError(error);
+  } finally {
+    AppState.isPremiumAnalyzing = false;
+    setPremiumButtonState('ready');
+  }
+}
+
 // ── Backend Communication ────────────────────────────────────────────
 async function analyzeWithBackend(payload) {
   const response = await fetch(
@@ -285,6 +432,7 @@ async function analyzeWithBackend(payload) {
 }
 
 async function chatWithBackend(message) {
+  const isGeminiSession = AppState.activeProvider === 'gemini';
   const response = await fetch(
     `${Config.BACKEND_URL}${Config.ENDPOINTS.chat}`,
     {
@@ -292,7 +440,9 @@ async function chatWithBackend(message) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         session_id: AppState.sessionId,
-        message: message
+        message: message,
+        provider: isGeminiSession ? 'gemini' : null,
+        api_key: isGeminiSession ? AppState.premiumApiKey : null
       })
     }
   );
@@ -365,9 +515,43 @@ function setAnalyzeButtonState(state) {
   DOM.analyzeBtn.disabled = config.disabled;
 }
 
+function setPremiumButtonState(state) {
+  if (!DOM.premiumToggleBtn) return;
+
+  const labelNode = DOM.premiumToggleBtn.childNodes[DOM.premiumToggleBtn.childNodes.length - 1];
+  const states = {
+    ready: {
+      text: ' Analyze with Premium',
+      disabled: false
+    },
+    extracting: {
+      text: ' Extracting page...',
+      disabled: true
+    },
+    analyzing: {
+      text: ' Analyzing with Gemini...',
+      disabled: true
+    }
+  };
+
+  const config = states[state] || states.ready;
+  if (labelNode) {
+    labelNode.textContent = config.text;
+  }
+  DOM.premiumToggleBtn.disabled = config.disabled;
+}
+
 function updateStatus(message) {
   if (DOM.analyzeBtn) {
     DOM.analyzeBtn.textContent = message;
+  }
+}
+
+function updatePremiumStatus(message) {
+  if (!DOM.premiumToggleBtn) return;
+  const labelNode = DOM.premiumToggleBtn.childNodes[DOM.premiumToggleBtn.childNodes.length - 1];
+  if (labelNode) {
+    labelNode.textContent = ` ${message}`;
   }
 }
 
@@ -402,7 +586,9 @@ function displayAnalysisResult(result) {
   DOM.aiContent.innerHTML = '';
   DOM.aiContent.appendChild(resultElement);
   
-  DOM.metaModel.textContent = 'Grounded webpage summary';
+  DOM.metaModel.textContent = AppState.activeProvider === 'gemini'
+    ? 'Gemini premium summary'
+    : 'Grounded webpage summary';
   
   // Scroll to results
   DOM.outputSection?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

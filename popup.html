@@ -408,6 +408,117 @@
       box-shadow: var(--shadow-md);
     }
 
+    .secondary-btn {
+      width: 100%;
+      padding: var(--space-3) var(--space-5);
+      background: transparent;
+      color: var(--text-primary);
+      border: 1px solid var(--border-medium);
+      border-radius: 12px;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .secondary-btn:hover {
+      background: var(--bg-elevated);
+      border-color: var(--accent-primary);
+      color: var(--accent-primary);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .secondary-btn.active {
+      background: var(--bg-tertiary);
+      border-color: var(--accent-primary);
+      color: var(--accent-primary);
+    }
+
+    .premium-panel {
+      display: none;
+      grid-template-columns: 1.55fr 1fr;
+      gap: var(--space-3);
+      padding: var(--space-4);
+      border: 1px solid var(--border-medium);
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .premium-panel.visible {
+      display: grid;
+    }
+
+    .premium-field {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      min-width: 0;
+    }
+
+    .premium-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-tertiary);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .premium-input,
+    .premium-select {
+      width: 100%;
+      min-width: 0;
+      padding: var(--space-3) var(--space-4);
+      background: var(--bg-primary);
+      border: 1px solid var(--border-medium);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 12px;
+      outline: none;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .premium-select {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      padding-right: 42px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='M3 5.5L7 9.5L11 5.5' stroke='%23AEB6BD' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      background-size: 14px 14px;
+      cursor: pointer;
+    }
+
+    .premium-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .premium-input:focus,
+    .premium-select:focus {
+      border-color: var(--accent-primary);
+      background: var(--bg-elevated);
+      box-shadow: 0 0 0 3px rgba(127, 127, 127, 0.08), var(--shadow-sm);
+    }
+
+    .premium-hint {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      line-height: 1.6;
+      margin-top: calc(var(--space-3) * -1);
+    }
+
     /* AI Output */
     .output-section { 
       display: none; 
@@ -800,6 +911,30 @@
     </svg>
     Analyze Page
   </button>
+
+  <button class="secondary-btn" id="premiumToggleBtn">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+      <path d="M8 1.5L10 5.6L14.5 6.2L11.25 9.3L12 14L8 11.9L4 14L4.75 9.3L1.5 6.2L6 5.6L8 1.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+    </svg>
+    Analyze with Premium
+  </button>
+
+  <div class="premium-panel" id="premiumPanel">
+    <div class="premium-field">
+      <label class="premium-label" for="premiumApiKey">API Key</label>
+      <input class="premium-input" id="premiumApiKey" type="password" placeholder="Paste your API key"/>
+    </div>
+    <div class="premium-field">
+      <label class="premium-label" for="premiumProvider">Provider</label>
+      <select class="premium-select" id="premiumProvider">
+        <option value="openai">OpenAI</option>
+        <option value="claude">Claude</option>
+        <option value="gemini">Gemini</option>
+        <option value="groq">Groq</option>
+      </select>
+    </div>
+  </div>
+  <div class="premium-hint" id="premiumHint">Premium provider wiring comes next. Your key and provider choice will be saved locally in the extension.</div>
 
   <!-- Error -->
   <div class="error-box" id="errorBox"></div>
