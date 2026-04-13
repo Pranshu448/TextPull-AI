@@ -112,7 +112,23 @@ fallback_prompt = PromptTemplate.from_template(fallback_template)
 fallback_chain = fallback_prompt | llm | StrOutputParser()
 
 GEMINI_MODEL = "gemini-2.5-flash"
+GROQ_MODEL = "llama-3.1-8b-instant"
 SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+
+
+def normalize_api_key(raw_key: Optional[str], provider_name: str) -> str:
+    key = (raw_key or "").strip()
+    if not key:
+        raise ValueError(f"{provider_name} API key is required.")
+
+    try:
+        key.encode("ascii")
+    except UnicodeEncodeError as error:
+        raise ValueError(
+            f"{provider_name} API key contains invalid characters. Paste the plain key value only."
+        ) from error
+
+    return key
 
 
 def build_context_snippets(content: str, query: str, max_chunks: int = 5):
@@ -185,7 +201,46 @@ def call_gemini(api_key: str, user_parts, system_instruction: str):
     return text
 
 
+def call_groq(api_key: str, messages):
+    body = {
+        "model": GROQ_MODEL,
+        "messages": messages,
+        "temperature": 0.2
+    }
+
+    request = urllib.request.Request(
+        "https://api.groq.com/openai/v1/chat/completions",
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "TextPull-AI/2.0 (+chrome-extension)"
+        },
+        method="POST"
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=60, context=SSL_CONTEXT) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        details = error.read().decode("utf-8", errors="replace")
+        raise ValueError(f"Groq request failed: {details}") from error
+    except urllib.error.URLError as error:
+        raise ValueError(f"Groq connection failed: {error.reason}") from error
+
+    choices = data.get("choices", [])
+    if not choices:
+        raise ValueError("Groq returned an empty response.")
+
+    text = choices[0].get("message", {}).get("content", "").strip()
+    if not text:
+        raise ValueError("Groq returned an empty response.")
+
+    return text
+
+
 def analyze_with_gemini(req: AnalyzeRequest):
+    api_key = normalize_api_key(req.api_key, "Gemini")
     system_instruction = """You summarize webpage content with strict grounding.
 
 Rules:
@@ -202,7 +257,7 @@ Rules:
         }]
     }]
 
-    result = call_gemini(req.api_key, user_parts, system_instruction)
+    result = call_gemini(api_key, user_parts, system_instruction)
 
     sessions[req.session_id] = {
         "provider": "gemini",
@@ -214,6 +269,7 @@ Rules:
 
 
 def chat_with_gemini(req: ChatRequest, session):
+    api_key = normalize_api_key(req.api_key, "Gemini")
     context_chunks = build_context_snippets(session["original_content"], req.message)
     context = "\n\n---\n\n".join(context_chunks)
 
@@ -242,10 +298,76 @@ Rules:
 4. Be direct and concise
 """
 
-    response = call_gemini(req.api_key, conversation_parts, system_instruction)
+    response = call_gemini(api_key, conversation_parts, system_instruction)
 
     history.append({"role": "user", "text": req.message})
     history.append({"role": "model", "text": response})
+    session["memory"] = history[-8:]
+
+    return {"result": response}
+
+
+def analyze_with_groq(req: AnalyzeRequest):
+    api_key = normalize_api_key(req.api_key, "Groq")
+    messages = [
+        {
+            "role": "system",
+            "content": """You summarize webpage content with strict grounding.
+
+Rules:
+1. Use only the webpage text provided by the user
+2. Do not add external facts or assumptions
+3. If information is unclear, say it is not clearly stated
+4. Keep the response concise, accurate, and directly useful
+"""
+        },
+        {
+            "role": "user",
+            "content": f"Task:\n{req.instruction}\n\nWebpage content:\n{req.content[:50000]}"
+        }
+    ]
+
+    result = call_groq(api_key, messages)
+
+    sessions[req.session_id] = {
+        "provider": "groq",
+        "memory": [],
+        "original_content": req.content
+    }
+
+    return {"result": result}
+
+
+def chat_with_groq(req: ChatRequest, session):
+    api_key = normalize_api_key(req.api_key, "Groq")
+    context_chunks = build_context_snippets(session["original_content"], req.message)
+    context = "\n\n---\n\n".join(context_chunks)
+    history = session.get("memory", [])
+
+    messages = [
+        {
+            "role": "system",
+            "content": """You answer questions about a webpage.
+
+Rules:
+1. Answer only from the supplied page context
+2. If the answer is not present, say: "I cannot find this information on the page."
+3. Do not use outside knowledge
+4. Be direct and concise
+"""
+        }
+    ]
+
+    messages.extend(history)
+    messages.append({
+        "role": "user",
+        "content": f"Page context:\n{context}\n\nQuestion: {req.message}"
+    })
+
+    response = call_groq(api_key, messages)
+
+    history.append({"role": "user", "content": req.message})
+    history.append({"role": "assistant", "content": response})
     session["memory"] = history[-8:]
 
     return {"result": response}
@@ -257,6 +379,10 @@ async def analyze_content(req: AnalyzeRequest):
             if not req.api_key:
                 return {"error": "Gemini API key is required."}
             return analyze_with_gemini(req)
+        if req.provider == "groq":
+            if not req.api_key:
+                return {"error": "Groq API key is required."}
+            return analyze_with_groq(req)
 
         # IMPROVED: Better chunking for context preservation
         text_splitter = RecursiveCharacterTextSplitter(
@@ -320,6 +446,10 @@ async def chat_with_document(req: ChatRequest):
         if not req.api_key:
             raise HTTPException(status_code=400, detail="Gemini API key is required for premium chat.")
         return chat_with_gemini(req, session)
+    if session.get("provider") == "groq":
+        if not req.api_key:
+            raise HTTPException(status_code=400, detail="Groq API key is required for premium chat.")
+        return chat_with_groq(req, session)
 
     vectorstore = session["vectorstore"]
     memory = session["memory"]

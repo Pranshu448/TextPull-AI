@@ -5,7 +5,6 @@
 // ── State Management ─────────────────────────────────────────────────
 const AppState = {
   selectedMode: 'tldr',
-  selectedModel: 'qwen2.5-coder:3b',
   theme: 'dark',
   premiumPanelOpen: false,
   premiumProvider: 'openai',
@@ -15,13 +14,7 @@ const AppState = {
   sessionId: `sess_${Math.random().toString(36).substr(2, 9)}`,
   lastSummary: '',
   isAnalyzing: false,
-  currentTab: null,
-  
-  // Reset session for new analysis
-  resetSession() {
-    this.sessionId = `sess_${Math.random().toString(36).substr(2, 9)}`;
-    this.lastSummary = '';
-  }
+  currentTab: null
 };
 
 // ── Configuration ────────────────────────────────────────────────────
@@ -119,18 +112,6 @@ function handleModeSelection(card) {
   document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('active'));
   card.classList.add('active');
   AppState.selectedMode = card.dataset.mode;
-}
-
-async function loadTheme() {
-  try {
-    const stored = await chrome.storage.local.get(['theme']);
-    AppState.theme = stored.theme === 'light' ? 'light' : 'dark';
-  } catch (error) {
-    console.warn('Failed to load theme preference:', error);
-    AppState.theme = 'dark';
-  }
-
-  applyTheme(AppState.theme);
 }
 
 async function loadPreferences() {
@@ -354,17 +335,18 @@ async function runAnalysis() {
 async function runPremiumAnalysis() {
   if (AppState.isPremiumAnalyzing) return;
 
-  if (AppState.premiumProvider !== 'gemini') {
-    showError('Only Gemini is connected right now. Choose Gemini in Premium to test your API key.');
-    return;
-  }
-
   if (!AppState.premiumApiKey.trim()) {
-    showError('Paste your Gemini API key first.');
+    const providerName = AppState.premiumProvider.charAt(0).toUpperCase() + AppState.premiumProvider.slice(1);
+    showError(`Paste your ${providerName} API key first.`);
     return;
   }
 
-  AppState.activeProvider = 'gemini';
+  if (!['gemini', 'groq'].includes(AppState.premiumProvider)) {
+    showError('OpenAI and Claude are not connected yet. Use Gemini or Groq in Premium for now.');
+    return;
+  }
+
+  AppState.activeProvider = AppState.premiumProvider;
   AppState.isPremiumAnalyzing = true;
   hideError();
   setPremiumButtonState('extracting');
@@ -387,7 +369,7 @@ async function runPremiumAnalysis() {
       mode: AppState.selectedMode,
       instruction: getTaskInstruction(AppState.selectedMode),
       content,
-      provider: 'gemini',
+      provider: AppState.premiumProvider,
       api_key: AppState.premiumApiKey
     });
 
@@ -432,7 +414,7 @@ async function analyzeWithBackend(payload) {
 }
 
 async function chatWithBackend(message) {
-  const isGeminiSession = AppState.activeProvider === 'gemini';
+  const isPremiumSession = ['gemini', 'groq'].includes(AppState.activeProvider);
   const response = await fetch(
     `${Config.BACKEND_URL}${Config.ENDPOINTS.chat}`,
     {
@@ -441,8 +423,8 @@ async function chatWithBackend(message) {
       body: JSON.stringify({
         session_id: AppState.sessionId,
         message: message,
-        provider: isGeminiSession ? 'gemini' : null,
-        api_key: isGeminiSession ? AppState.premiumApiKey : null
+        provider: isPremiumSession ? AppState.activeProvider : null,
+        api_key: isPremiumSession ? AppState.premiumApiKey : null
       })
     }
   );
@@ -529,7 +511,7 @@ function setPremiumButtonState(state) {
       disabled: true
     },
     analyzing: {
-      text: ' Analyzing with Gemini...',
+      text: ' Analyzing with Premium...',
       disabled: true
     }
   };
@@ -588,6 +570,8 @@ function displayAnalysisResult(result) {
   
   DOM.metaModel.textContent = AppState.activeProvider === 'gemini'
     ? 'Gemini premium summary'
+    : AppState.activeProvider === 'groq'
+      ? 'Groq premium summary'
     : 'Grounded webpage summary';
   
   // Scroll to results
@@ -708,7 +692,7 @@ function formatAIResponse(text) {
       if (/^[-*]\s/.test(trimmed)) {
         const content = trimmed
           .substring(2)
-          .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--cyan)">$1</strong>');
+          .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--accent-primary)">$1</strong>');
         return `<div class="ai-bullet">
           <span class="bullet-dot">•</span>
           <span>${content}</span>
@@ -720,7 +704,7 @@ function formatAIResponse(text) {
         const number = trimmed.match(/^\d+\./)[0];
         const content = trimmed
           .replace(/^\d+\.\s/, '')
-          .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--cyan)">$1</strong>');
+          .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--accent-primary)">$1</strong>');
         return `<div class="ai-bullet">
           <span class="bullet-dot" style="font-size:0.9em">${number}</span>
           <span>${content}</span>
@@ -730,7 +714,7 @@ function formatAIResponse(text) {
       // Regular text with bold formatting
       const formatted = trimmed.replace(
         /\*\*(.*?)\*\*/g,
-        '<strong style="color:var(--text)">$1</strong>'
+        '<strong style="color:var(--text-primary)">$1</strong>'
       );
       return `<div style="margin-bottom:6px">${formatted}</div>`;
     })
@@ -792,15 +776,15 @@ function appendChatMessage(content, type) {
   const styles = {
     user: {
       alignSelf: 'flex-end',
-      background: 'var(--s3)',
+      background: 'var(--bg-elevated)',
       borderRadius: '8px 8px 0 8px',
-      border: '1px solid var(--border2)'
+      border: '1px solid var(--border-medium)'
     },
     ai: {
       alignSelf: 'flex-start',
-      background: 'rgba(0,229,204,0.07)',
+      background: 'rgba(127, 127, 127, 0.08)',
       borderRadius: '8px 8px 8px 0',
-      border: '1px solid rgba(0,229,204,0.15)'
+      border: '1px solid var(--border-medium)'
     },
     error: {
       alignSelf: 'flex-start',

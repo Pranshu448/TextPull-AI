@@ -742,30 +742,6 @@
       display: block; 
     }
 
-    /* No-key warning */
-    .key-warning {
-      padding: var(--space-4);
-      background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.04) 100%);
-      border: 1px solid rgba(245, 158, 11, 0.2);
-      border-radius: 12px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--warning);
-      line-height: 1.7;
-      display: none;
-      box-shadow: var(--shadow-sm);
-    }
-
-    .key-warning.show { 
-      display: block; 
-    }
-
-    .key-warning strong { 
-      display: block; 
-      margin-bottom: var(--space-1); 
-      font-weight: 700; 
-    }
-
     /* Chat section styling */
     .chat-section {
       margin-top: var(--space-5);
@@ -896,12 +872,6 @@
         <div class="mode-name">Keywords</div>
       </div>
     </div>
-  </div>
-
-  <!-- No key warning -->
-  <div class="key-warning" id="keyWarning">
-    <strong>⚠ Ollama Not Running</strong>
-    Make sure Ollama is installed and running locally on port 11434.
   </div>
 
   <!-- CTA -->
