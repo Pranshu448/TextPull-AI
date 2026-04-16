@@ -7,7 +7,11 @@ export function notFoundHandler(_req, res) {
 export function errorHandler(error, _req, res, _next) {
   const status = error.status || 500;
   logger.error({ err: error.message, status }, 'Request failed');
-  const exposeMessage = process.env.NODE_ENV !== 'production' || status < 500;
+  const exposeMessage =
+    process.env.NODE_ENV !== 'production' ||
+    status < 500 ||
+    [502, 503, 504].includes(status) ||
+    error.expose === true;
   res.status(status).json({
     error: exposeMessage ? error.message : 'Internal server error.'
   });

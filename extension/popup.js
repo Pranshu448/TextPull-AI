@@ -1,15 +1,17 @@
 const STORAGE_KEYS = {
   theme: 'textpull_theme',
   provider: 'textpull_provider',
-  providerKeys: 'textpull_provider_keys'
+  providerKeys: 'textpull_provider_keys',
+  backendUrl: 'textpull_backend_url'
 };
 
-const DEFAULT_BACKEND_URL = 'http://localhost:8787';
+const DEFAULT_BACKEND_URL = 'https://textpull-ai.onrender.com';
 
 const state = {
   mode: 'tldr',
   provider: 'auto',
   theme: 'dark',
+  backendUrl: DEFAULT_BACKEND_URL,
   providerKeys: {
     groq: '',
     gemini: ''
@@ -23,6 +25,7 @@ const ui = {
   apiKeyField: document.getElementById('apiKeyField'),
   apiKeyInput: document.getElementById('apiKeyInput'),
   analyzeBtn: document.getElementById('analyzeBtn'),
+  backendUrlInput: document.getElementById('backendUrlInput'),
   chatForm: document.getElementById('chatForm'),
   chatInput: document.getElementById('chatInput'),
   chatHistory: document.getElementById('chatHistory'),
@@ -62,6 +65,12 @@ function bindEvents() {
     syncProviderField();
   });
 
+  ui.backendUrlInput.addEventListener('change', async () => {
+    state.backendUrl = normalizeBackendUrl(ui.backendUrlInput.value);
+    ui.backendUrlInput.value = state.backendUrl;
+    await chrome.storage.local.set({ [STORAGE_KEYS.backendUrl]: state.backendUrl });
+  });
+
   ui.apiKeyInput.addEventListener('input', handleApiKeyInput);
 
   ui.themeToggleBtn.addEventListener('click', async () => {
@@ -79,14 +88,17 @@ async function loadPreferences() {
   const stored = await chrome.storage.local.get([
     STORAGE_KEYS.theme,
     STORAGE_KEYS.provider,
-    STORAGE_KEYS.providerKeys
+    STORAGE_KEYS.providerKeys,
+    STORAGE_KEYS.backendUrl
   ]);
   state.theme = stored[STORAGE_KEYS.theme] || 'dark';
   state.provider = stored[STORAGE_KEYS.provider] || 'auto';
+  state.backendUrl = normalizeBackendUrl(stored[STORAGE_KEYS.backendUrl] || DEFAULT_BACKEND_URL);
   state.providerKeys = {
     ...state.providerKeys,
     ...(stored[STORAGE_KEYS.providerKeys] || {})
   };
+  ui.backendUrlInput.value = state.backendUrl;
   ui.providerSelect.value = state.provider;
   applyTheme();
   syncProviderField();
@@ -205,11 +217,19 @@ async function extractCurrentPage() {
 }
 
 async function callBackend(payload) {
-  const response = await fetch(`${DEFAULT_BACKEND_URL}/ask`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
+  let response;
+
+  try {
+    response = await fetch(`${state.backendUrl}/ask`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    throw new Error(
+      `Could not reach the backend at ${state.backendUrl}. Check that the URL is correct, the Render service is awake, and CORS allows the extension.`
+    );
+  }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -257,4 +277,13 @@ function getActiveProviderKey() {
   }
 
   return state.providerKeys[state.provider] || '';
+}
+
+function normalizeBackendUrl(value) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) {
+    return DEFAULT_BACKEND_URL;
+  }
+
+  return trimmed.replace(/\/+$/, '');
 }
