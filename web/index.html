@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TextPull AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a class="logo" href="#">TextPull AI</a>
+    <button
+      class="menu-toggle"
+      type="button"
+      aria-expanded="false"
+      aria-controls="site-nav"
+      aria-label="Open navigation menu"
+    >
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+    <nav id="site-nav">
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="#demo">Demo</a>
+      <a href="#stack">Stack</a>
+      <a class="cta-link" href="./textpull-ai-extension.zip" download="textpull-ai-extension.zip">Install Extension</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">RAG-powered browser companion</p>
+        <h1>Turn any article, doc, or tutorial into grounded answers in one click.</h1>
+        <p class="lead">
+          TextPull AI pairs a polished Chrome extension with a secure backend so teams can summarize long pages,
+          ask follow-up questions, and stay anchored to the source instead of generic AI guesses.
+        </p>
+        <div class="hero-actions">
+          <a class="primary-button" href="./textpull-ai-extension.zip" download="textpull-ai-extension.zip">Install Extension</a>
+          <a class="secondary-button" href="#demo">Watch Demo</a>
+        </div>
+        <ul class="hero-points">
+          <li>Grounded page summaries</li>
+          <li>Multi-model backend fallback</li>
+          <li>No API keys in the extension</li>
+        </ul>
+      </div>
+      <div class="hero-card">
+        <div class="hero-window">
+          <div class="window-bar"></div>
+          <div class="window-body">
+            <p class="mini-label">Sample Result</p>
+            <h3>React explained without leaving the page</h3>
+            <p>
+              TextPull extracts the readable content, sends it to the backend RAG layer, and returns a concise,
+              source-grounded answer with chat follow-ups.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="section">
+      <div class="section-heading">
+        <p class="eyebrow">Features</p>
+        <h2>Built for people who need signal, not fluff.</h2>
+      </div>
+      <div class="feature-grid">
+        <article class="feature-card">
+          <h3>RAG-based answers</h3>
+          <p>The backend chunks and ranks source text before each response so follow-up chat stays attached to the page.</p>
+        </article>
+        <article class="feature-card">
+          <h3>Source highlighting ready</h3>
+          <p>The architecture keeps the original page chunks available, so source highlighting can be layered in cleanly.</p>
+        </article>
+        <article class="feature-card">
+          <h3>Multi-model support</h3>
+          <p>Groq, Gemini, and optional Ollama fallback let you optimize for speed, cost, or local privacy.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="install" class="section">
+      <div class="section-heading">
+        <p class="eyebrow">Install</p>
+        <h2>From download to a working Chrome extension</h2>
+      </div>
+      <div class="install-grid">
+        <article class="install-card">
+          <span class="step-number">1</span>
+          <h3>Download the zip</h3>
+          <p>Click <strong>Install Extension</strong> to download <code>textpull-ai-extension.zip</code> to your computer.</p>
+        </article>
+        <article class="install-card">
+          <span class="step-number">2</span>
+          <h3>Extract the folder</h3>
+          <p>Unzip the download so you have a normal folder named <code>extension</code> with <code>manifest.json</code> inside it.</p>
+        </article>
+        <article class="install-card">
+          <span class="step-number">3</span>
+          <h3>Open Chrome extensions</h3>
+          <p>Go to <code>chrome://extensions</code> in Chrome and turn on <strong>Developer mode</strong> in the top-right corner.</p>
+        </article>
+        <article class="install-card">
+          <span class="step-number">4</span>
+          <h3>Load unpacked</h3>
+          <p>Click <strong>Load unpacked</strong> and choose the extracted <code>extension</code> folder, not the zip file itself.</p>
+        </article>
+        <article class="install-card">
+          <span class="step-number">5</span>
+          <h3>Pin and use it</h3>
+          <p>Pin TextPull AI from the Chrome toolbar, open any article or doc, and launch the extension popup to start testing.</p>
+        </article>
+        <article class="install-card install-card-highlight">
+          <h3>Quick note</h3>
+          <p>Chrome does not install unpacked extensions directly from a website click. The download gives users the source package, then Chrome loads it from the extracted folder.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="demo" class="section demo-section">
+      <div class="section-heading">
+        <p class="eyebrow">Demo</p>
+        <h2>How the product feels in practice</h2>
+      </div>
+      <div class="demo-placeholder">
+        <div>
+          <p class="mini-label">Demo GIF placeholder</p>
+          <h3>Replace this block with a product walkthrough recording</h3>
+          <p>Show a user opening the extension, generating a summary, and asking a grounded follow-up question.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="stack" class="section">
+      <div class="section-heading">
+        <p class="eyebrow">Tech Stack</p>
+        <h2>Clean separation between product surfaces</h2>
+      </div>
+      <div class="stack-grid">
+        <article>
+          <h3>Extension</h3>
+          <p>Chrome MV3 popup, content extraction, backend-only API integration.</p>
+        </article>
+        <article>
+          <h3>Backend</h3>
+          <p>Node.js, Express, route/controller/service layers, provider fallback, rate limiting, and logging.</p>
+        </article>
+        <article>
+          <h3>Web</h3>
+          <p>Fast static landing page that can ship on Vercel with an install CTA and product storytelling.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>TextPull AI</p>
+    <p>Chrome extension + secure backend for grounded page intelligence.</p>
+  </footer>
+  <script src="script.js"></script>
+</body>
+</html>

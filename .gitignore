@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 _metadata/
 dist/
+backend/node_modules/
+backend/.env
+web/.vercel/

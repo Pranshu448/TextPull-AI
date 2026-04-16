@@ -1,4 +1,4 @@
-function extractPageText() {
+function extractPageContent() {
   const skipTags = new Set([
     'SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'OBJECT',
     'EMBED', 'CANVAS', 'SVG', 'HEAD', 'META', 'LINK'
@@ -23,17 +23,17 @@ function extractPageText() {
   ];
 
   const seen = new Set();
-  const results = [];
+  const textNodes = [];
 
   function normalize(text) {
     return text.replace(/\s+/g, ' ').trim();
   }
 
-  function shouldSkipElement(el) {
-    if (!el || skipTags.has(el.tagName)) return true;
-    if (el.matches?.(noisySelectors.join(','))) return true;
+  function shouldSkipElement(node) {
+    if (!node || skipTags.has(node.tagName)) return true;
+    if (node.matches?.(noisySelectors.join(','))) return true;
 
-    const style = window.getComputedStyle(el);
+    const style = window.getComputedStyle(node);
     if (
       style.display === 'none' ||
       style.visibility === 'hidden' ||
@@ -42,15 +42,15 @@ function extractPageText() {
       return true;
     }
 
-    const rect = el.getBoundingClientRect();
+    const rect = node.getBoundingClientRect();
     return rect.width === 0 && rect.height === 0;
   }
 
-  function addText(text) {
-    const normalized = normalize(text);
+  function addText(value) {
+    const normalized = normalize(value);
     if (normalized.length < 3 || seen.has(normalized)) return;
     seen.add(normalized);
-    results.push(normalized);
+    textNodes.push(normalized);
   }
 
   function walk(node) {
@@ -67,51 +67,48 @@ function extractPageText() {
     }
   }
 
-  const root =
+  const preferredRoot =
     document.querySelector('article, main, [role="main"], .article, .post, .content') ||
     document.body;
 
-  walk(root);
+  walk(preferredRoot);
 
-  if (results.length < 20 && root !== document.body && document.body) {
+  if (textNodes.length < 20 && preferredRoot !== document.body && document.body) {
     walk(document.body);
   }
 
-  const metaDescription = document
+  const description = document
     .querySelector('meta[name="description"], meta[property="og:description"]')
     ?.getAttribute('content');
 
-  if (metaDescription) {
-    addText(metaDescription);
+  if (description) addText(description);
+
+  for (const heading of document.querySelectorAll('h1, h2')) {
+    addText(heading.textContent || '');
   }
 
-  const headings = Array.from(document.querySelectorAll('h1, h2'))
-    .map((el) => el.textContent || '')
-    .map(normalize)
-    .filter(Boolean);
-
-  headings.forEach(addText);
-
-  const fullText = normalize(results.join('\n'));
-  const words = fullText ? fullText.split(/\s+/) : [];
+  const text = normalize(textNodes.join('\n'));
+  const wordCount = text ? text.split(/\s+/).length : 0;
 
   return {
-    text: fullText,
     title: document.title,
-    pageTitle: document.title,
     url: window.location.href,
-    charCount: fullText.length,
-    wordCount: words.length
+    text,
+    wordCount
   };
 }
 
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.action === 'extractText') {
-    try {
-      sendResponse({ success: true, data: extractPageText() });
-    } catch (e) {
-      sendResponse({ success: false, error: e.message });
-    }
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.action !== 'extract-content') return false;
+
+  try {
+    sendResponse({ success: true, data: extractPageContent() });
+  } catch (error) {
+    sendResponse({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown extraction error'
+    });
   }
+
   return true;
 });

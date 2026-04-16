@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TextPull AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">TextPull AI</p>
+        <h1>Grounded page answers from the tab you're reading.</h1>
+      </div>
+      <button id="themeToggleBtn" class="icon-button" aria-label="Toggle theme">◐</button>
+    </header>
+
+    <section class="page-card">
+      <p id="pageTitle" class="page-title">Loading current tab…</p>
+      <p id="pageUrl" class="page-url">—</p>
+    </section>
+
+    <section class="controls">
+      <div class="control-header">
+        <span>Response style</span>
+      </div>
+      <div class="provider-row">
+        <label class="field provider-input">
+          <span>AI Provider</span>
+          <select id="providerSelect">
+            <option value="auto">Auto Fallback</option>
+            <option value="groq">Groq</option>
+            <option value="gemini">Gemini</option>
+            <option value="ollama">Ollama</option>
+          </select>
+        </label>
+        <label class="field api-key-field" id="apiKeyField">
+          <span>API Key</span>
+          <input id="apiKeyInput" type="password" placeholder="Paste your provider API key" />
+        </label>
+      </div>
+      <div class="mode-grid">
+        <button class="mode-chip active" data-mode="tldr">TL;DR</button>
+        <button class="mode-chip" data-mode="bullets">Bullets</button>
+        <button class="mode-chip" data-mode="detailed">Detailed</button>
+        <button class="mode-chip" data-mode="keywords">Keywords</button>
+      </div>
+      <button id="analyzeBtn" class="primary-button">Analyze this page</button>
+      <p id="statusText" class="status-text">Ready when you are.</p>
+      <p id="errorBox" class="error-box" hidden></p>
+    </section>
+
+    <section id="resultSection" class="result-section" hidden>
+      <div class="result-header">
+        <div>
+          <p class="section-label">Summary</p>
+          <p id="metaText" class="meta-text">—</p>
+        </div>
+        <button id="copyBtn" class="ghost-button">Copy</button>
+      </div>
+      <article id="summaryOutput" class="result-card"></article>
+    </section>
+
+    <section id="chatSection" class="chat-section" hidden>
+      <div class="result-header">
+        <div>
+          <p class="section-label">Ask the page</p>
+          <p class="meta-text">Powered by the backend RAG session.</p>
+        </div>
+      </div>
+      <div id="chatHistory" class="chat-history"></div>
+      <form id="chatForm" class="chat-form">
+        <input id="chatInput" type="text" placeholder="Ask a follow-up question…" />
+        <button id="chatSubmitBtn" class="primary-button" type="submit">Ask</button>
+      </form>
+    </section>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
