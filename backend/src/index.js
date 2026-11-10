@@ -40,8 +40,20 @@ app.use(cors({
   }
 }));
 
+const healthStatus = { ok: true, service: 'textpull-backend' };
+
+// Keep the deployment URL useful to generic uptime monitors.  The detailed
+// health endpoint below remains the canonical target for PagerMind and Render.
+app.get('/', (_req, res) => {
+  res.status(200).json({
+    ...healthStatus,
+    health: '/health'
+  });
+});
+
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'textpull-backend' });
+  res.set('Cache-Control', 'no-store');
+  res.status(200).json(healthStatus);
 });
 
 app.use('/ask', apiRateLimiter, askRouter);
